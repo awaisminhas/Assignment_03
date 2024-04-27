@@ -1,23 +1,35 @@
-from kafka import KafkaProducer
 import json
+import threading
 import time
+from kafka import KafkaProducer
 
-# Specify the path to your preprocessed JSON file
-json_file_path = '/home/malaika/Documents/output.json'
+# Load data from the JSON file
+with open('/home/muhammad/preprocessed_data.json', 'r') as file:
+    data = json.load(file)
 
-# Function to read preprocessed data from JSON file and stream it
-def stream_preprocessed_data(json_file_path):
-    producer = KafkaProducer(bootstrap_servers='localhost:9092')
-    
-    with open(json_file_path, 'r') as file:
-        data = json.load(file)
-        for item in data:
-            # Serialize data to JSON format and send it to Kafka topic
-            producer.send('preprocessed_data_topic', json.dumps(item).encode('utf-8'))
-            time.sleep(0.1)  # Adjust sleep time as needed for desired streaming speed
+bootstrap_servers = ['localhost:9092']
+topic = 'topic01'
 
-    producer.close()
+# Define the producer function
+def produce_data(data, chunk_size, producer):
+    for i in range(0, len(data), chunk_size):
+        chunk = data[i:i+chunk_size]
+        combined_lists = []
+        for entry in chunk:
+            also_buy_list = entry.get('also_buy', [])
+            combined_lists.append(also_buy_list)
+        producer.send(topic, value=combined_lists)
+        print("List of lists sent to Kafka topic:", combined_lists)
+        time.sleep(60)  # Simulating delay
 
-# Start streaming preprocessed data
-stream_preprocessed_data(json_file_path)
+# Create a Kafka producer
+producer = KafkaProducer(bootstrap_servers=bootstrap_servers,
+                         value_serializer=lambda x: json.dumps(x).encode('utf-8'))
+
+# Create and start the producer thread
+producer_thread = threading.Thread(target=produce_data, args=(data, 12, producer))
+producer_thread.start()
+
+# Wait for the producer thread to finish
+producer_thread.join()
 
